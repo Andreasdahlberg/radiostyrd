@@ -50,3 +50,11 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+#ESP-IDF
+sdkconfig*
+loadable_elf_example_test.py
+build
+
+#sublime
+*.sublime-workspace
