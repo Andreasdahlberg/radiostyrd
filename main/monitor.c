@@ -102,10 +102,10 @@ static struct monitor_t monitor = {
         .i = 0,
         .cv = 0,
         .parameters = {
-            .kp = 0.07,
-            .ki = 0.09,
+            .kp = 0.8,
+            .ki = 0.1,
             .kd = 0.0,
-            .sp = 800,
+            .sp = 600,
             .imax = 700
         }
     },
@@ -136,8 +136,7 @@ void monitor_init(void)
 
 uint32_t monitor_get_battery_voltage(void)
 {
-    struct channel_config_t *config_p = &monitor.channels[1];
-
+    const struct channel_config_t *config_p = &monitor.channels[1];
     const size_t number_of_samples = 8;
     uint32_t adc_reading = 0;
 
@@ -148,6 +147,7 @@ uint32_t monitor_get_battery_voltage(void)
 
     adc_reading /= number_of_samples;
 
+    /* Multiply with two to compensate for the battery voltage divider on the HUZZAH32-board. */
     return esp_adc_cal_raw_to_voltage(adc_reading, config_p->calibration_data_p) * 2;
 }
 
@@ -167,7 +167,6 @@ void monitor_set_pid_parameters(const struct pid_parameters_t *parameters)
 
     ESP_LOGI(TAG, "PID(kp=%.2f, ki=%.2f, kd=%.2f, sp=%u)", parameters->kp, parameters->ki, parameters->kd, parameters->sp);
 
-    //TODO: Lock?
     monitor.pid.parameters = *parameters;
 }
 
@@ -231,7 +230,7 @@ static float apply_cv_limits(float cv)
 
 static void check_for_stall(void)
 {
-    uint32_t current = Filter_Output(&monitor.filter);
+    const uint32_t current = Filter_Output(&monitor.filter);
     if (current > monitor.stall_current)
     {
 
@@ -260,13 +259,14 @@ static void measurement_task(void * parameter) {
 
     while (1)
     {
-        uint32_t pv = get_motor_current();
-        Filter_Process(&monitor.filter, pv);
+        const uint32_t motor_current = get_motor_current();
+        Filter_Process(&monitor.filter, motor_current);
 
         check_for_stall();
 
-        // TODO: Use filtered current!
+        const uint32_t pv = Filter_Output(&monitor.filter);
         monitor.pid.p = monitor.pid.parameters.sp - pv;
+
         monitor.pid.i = monitor.pid.i + monitor.pid.p;
         if (monitor.pid.i > monitor.pid.parameters.imax)
         {
