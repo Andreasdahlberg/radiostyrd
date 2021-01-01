@@ -43,7 +43,6 @@ uint32_t monitor_get_motor_current(void);
 
 float monitor_get_suggested_duty(void);
 
-
 void monitor_set_pid_parameters(const struct pid_parameters_t *parameters);
 
 struct pid_parameters_t monitor_get_pid_parameters(void);

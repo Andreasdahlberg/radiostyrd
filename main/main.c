@@ -64,10 +64,9 @@ enum config_mode_t {CONFIG_DISABLED, CONFIG_SPEED_STEERING, CONFIG_CONTROLLER, C
 struct module_t
 {
   enum config_mode_t config_mode;
-  float suggested_speed;
-  float target_speed;
   bool limit_current;
   bool notify_stall;
+  size_t input_id;
 };
 
 struct controller_t
@@ -82,6 +81,7 @@ struct controller_t
   int8_t prev_right_y_value;
 
   enum ps3_status_battery battery_status;
+  size_t input_id;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -94,6 +94,7 @@ static int8_t controller_get_left_deadzone(void);
 static void controller_set_right_deadzone(int8_t);
 static int8_t controller_get_right_deadzone(void);
 
+static void handle_speedcontroller_callback(size_t id, float value);
 static float value_to_percent(int8_t value, int8_t min);
 static void adjust_pid_p(float modifier_value);
 static void adjust_pid_i(float modifier_value);
@@ -133,10 +134,8 @@ void app_main(void)
 {
   module = (typeof(module)) {
     .config_mode = CONFIG_DISABLED,
-     .suggested_speed = 1.0,
-      .target_speed = 0.0,
-       .limit_current = true,
-       .notify_stall = true
+     .limit_current = true,
+      .notify_stall = true
   };
 
   controller = (typeof(controller)) {
@@ -149,8 +148,12 @@ void app_main(void)
   debugserver_init();
   powertrain_init();
   lighting_init();
+  speedcontroller_init();
   monitor_init();
   controller_init();
+
+  module.input_id = speedcontroller_register_input("Current limit");
+  speedcontroller_register_listener(handle_speedcontroller_callback);
 
   ESP_LOGI(TAG, "Waiting for controller connection...");
   lighting_set_indicator_color(INDICATOR_BLUE);
@@ -187,22 +190,10 @@ void app_main(void)
 
     if (module.limit_current)
     {
-      module.suggested_speed = monitor_get_suggested_duty() / 100;
+      float suggested_speed = monitor_get_suggested_duty() / 100;
+      speedcontroller_input(module.input_id, suggested_speed);
 
-      if (module.target_speed < 0 && (-1 * module.suggested_speed) >= module.target_speed)
-      {
-        uint32_t current = monitor_get_motor_current();
-        ESP_LOGV(TAG, "I: %u, SS:%.2f, TS:%.2f)", current, -1 * module.suggested_speed, module.target_speed);
-
-        powertrain_set_speed(-1 * module.suggested_speed);
-      }
-      else if (module.target_speed > 0 && module.suggested_speed <= module.target_speed)
-      {
-        uint32_t current = monitor_get_motor_current();
-        ESP_LOGV(TAG, "I: %u, SS:%.2f, TS:%.2f)", current, module.suggested_speed, module.target_speed);
-
-        powertrain_set_speed(module.suggested_speed);
-      }
+      ESP_LOGV(TAG, "%u", monitor_get_motor_current());
     }
   }
 }
@@ -217,6 +208,8 @@ static void controller_init(void)
   ps3SetBluetoothMacAddress(mac_address);
   ps3SetEventCallback(controller_event_cb);
   ps3Init();
+
+  controller.input_id = speedcontroller_register_input("PS3 Controller");
 }
 
 static void controller_set_left_deadzone(int8_t value)
@@ -249,6 +242,20 @@ static void controller_set_right_deadzone(int8_t value)
 static int8_t controller_get_right_deadzone(void)
 {
   return controller.deadzone.right;
+}
+
+static void handle_speedcontroller_callback(size_t id, float value)
+{
+  static float prev_value = 100.0;
+
+  if (prev_value != value)
+  {
+    prev_value = value;
+
+    const enum speedcontroller_direction_t direction = speedcontroller_get_direction();
+    const float speed = (direction == SPEEDCONTROLLER_FORWARD) ? value : value * -1.0;
+    powertrain_set_speed(speed);
+  }
 }
 
 static float value_to_percent(int8_t value, int8_t min)
@@ -682,19 +689,15 @@ static void controller_event_cb(ps3_t ps3, ps3_event_t event)
 
       if (abs(right_y_value) >= deadzone)
       {
-        float percent = value_to_percent(right_y_value, deadzone);
-        module.target_speed = percent;
+        const float percent = value_to_percent(right_y_value, deadzone);
+        const enum speedcontroller_direction_t direction = percent >= 0 ? SPEEDCONTROLLER_FORWARD : SPEEDCONTROLLER_REVERSE;
 
-        //TODO: Check this comparison
-        if (!module.limit_current || fabsf(percent) < fabsf(module.suggested_speed))
-        {
-          powertrain_set_speed(percent);
-        }
+        speedcontroller_set_direction(direction);
+        speedcontroller_input(controller.input_id, percent);
       }
       else
       {
-        module.target_speed = 0.0;
-        powertrain_set_speed(0);
+        speedcontroller_input(controller.input_id, 0.0);
       }
     }
     controller.prev_right_y_value = right_y_value;
