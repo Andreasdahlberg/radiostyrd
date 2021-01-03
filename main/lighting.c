@@ -121,10 +121,9 @@ void lighting_init(void)
   init_indicator_pwm();
 
   ledc_fade_func_install(0);
+  ESP_LOGI(TAG, "Initialized");
 
   lighting_headlight_on();
-
-  ESP_LOGI(TAG, "Initialized");
 }
 
 void lighting_set_headlight_limits(float low_beam, float high_beam)
@@ -137,7 +136,7 @@ void lighting_set_headlight_limits(float low_beam, float high_beam)
 
 void lighting_headlight_on(void)
 {
-  ESP_LOGD(TAG, "%s()", __FUNCTION__);
+  ESP_LOGI(TAG, "%s()", __FUNCTION__);
 
   lighting.headlights.on = true;
   fade_headlights(lighting.headlights.brightness);
@@ -145,7 +144,7 @@ void lighting_headlight_on(void)
 
 void lighting_headlight_off(void)
 {
-  ESP_LOGD(TAG, "%s()", __FUNCTION__);
+  ESP_LOGI(TAG, "%s()", __FUNCTION__);
 
   lighting.headlights.on = false;
   fade_headlights(0);
@@ -153,7 +152,7 @@ void lighting_headlight_off(void)
 
 void lighting_headlight_toggle(void)
 {
-  ESP_LOGD(TAG, "%s()", __FUNCTION__);
+  ESP_LOGI(TAG, "%s()", __FUNCTION__);
 
   if (lighting.headlights.on)
   {
@@ -167,7 +166,7 @@ void lighting_headlight_toggle(void)
 
 void lighting_headlight_toggle_high_low_beam(void)
 {
-  ESP_LOGD(TAG, "%s()", __FUNCTION__);
+  ESP_LOGI(TAG, "%s()", __FUNCTION__);
   if (lighting.headlights.on)
   {
     if (lighting.headlights.brightness == lighting.headlights.low_beam_brightness)
@@ -183,7 +182,7 @@ void lighting_headlight_toggle_high_low_beam(void)
 
 void lighting_headlight_low_beam(void)
 {
-  ESP_LOGD(TAG, "%s()", __FUNCTION__);
+  ESP_LOGI(TAG, "%s()", __FUNCTION__);
 
   lighting.headlights.on = true;
   lighting.headlights.brightness = lighting.headlights.low_beam_brightness;
@@ -192,7 +191,7 @@ void lighting_headlight_low_beam(void)
 
 void lighting_headlight_high_beam(void)
 {
-  ESP_LOGD(TAG, "%s()", __FUNCTION__);
+  ESP_LOGI(TAG, "%s()", __FUNCTION__);
 
   lighting.headlights.on = true;
   lighting.headlights.brightness = lighting.headlights.high_beam_brightness;
@@ -201,7 +200,7 @@ void lighting_headlight_high_beam(void)
 
 void lighting_set_headlight_brightness(float brightness)
 {
-  ESP_LOGD(TAG, "%s(%.2f)", __FUNCTION__, brightness);
+  ESP_LOGI(TAG, "%s(%.2f)", __FUNCTION__, brightness);
 
   lighting.headlights.brightness = brightness;
   fade_headlights(brightness);
@@ -216,8 +215,7 @@ void lighting_set_indicator_color(enum color_t color)
 void lighting_set_indicator_mode(enum mode_t mode)
 {
   ESP_LOGD(TAG, "%s(%u)", __FUNCTION__, (uint32_t)mode);
-  //if (mode != lighting.indicator.mode)
-  //{
+
   lighting.indicator.mode = mode;
 
   if (has_active_task())
@@ -246,7 +244,6 @@ void lighting_set_indicator_mode(enum mode_t mode)
     ESP_LOGW(TAG, "Unknown mode(%u)", mode);
     break;
   }
-  //}
 }
 
 void lighting_set_indicator_brightness(float brightness)
