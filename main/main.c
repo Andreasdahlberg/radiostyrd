@@ -94,7 +94,7 @@ static int8_t controller_get_left_deadzone(void);
 static void controller_set_right_deadzone(int8_t);
 static int8_t controller_get_right_deadzone(void);
 
-static void handle_speedcontroller_callback(size_t id, float value);
+static void handle_speedcontroller_callback(enum speedcontroller_message_type_t type, size_t id, float value);
 static float value_to_percent(int8_t value, int8_t min);
 static void adjust_pid_p(float modifier_value);
 static void adjust_pid_i(float modifier_value);
@@ -244,17 +244,32 @@ static int8_t controller_get_right_deadzone(void)
   return controller.deadzone.right;
 }
 
-static void handle_speedcontroller_callback(size_t id, float value)
+static void handle_speedcontroller_callback(enum speedcontroller_message_type_t type, size_t id, float value)
 {
-  static float prev_value = 100.0;
-
-  if (prev_value != value)
+  switch (type)
   {
-    prev_value = value;
+  case SPEEDCONTROLLER_SPEED:
+    powertrain_set_speed(value);
+    break;
 
-    const enum speedcontroller_direction_t direction = speedcontroller_get_direction();
-    const float speed = (direction == SPEEDCONTROLLER_FORWARD) ? value : value * -1.0;
-    powertrain_set_speed(speed);
+  case SPEEDCONTROLLER_STEERING:
+    powertrain_steer(value);
+    break;
+
+  case SPEEDCONTROLLER_BRAKE:
+    if (value)
+    {
+      powertrain_engage_brakes();
+    }
+    else
+    {
+      powertrain_disengage_brakes();
+    }
+    break;
+
+  default:
+    ESP_LOGI(TAG, "%s() Unsupported type(%u)", __FUNCTION__, (uint32_t)type);
+    break;
   }
 }
 
@@ -629,11 +644,11 @@ static void controller_event_cb(ps3_t ps3, ps3_event_t event)
   if (event.button_down.r1)
   {
     ps3SetRumble(8, 100, 8, 100);
-    powertrain_engage_brakes();
+    speedcontroller_brake(true);
   }
   else if (event.button_up.r1)
   {
-    powertrain_disengage_brakes();
+    speedcontroller_brake(false);
   }
 
   if (event.button_down.up)
@@ -668,11 +683,11 @@ static void controller_event_cb(ps3_t ps3, ps3_event_t event)
       if (abs(left_x_value) > deadzone)
       {
         float percent = value_to_percent(left_x_value, deadzone);
-        powertrain_steer(percent);
+        speedcontroller_steer(percent);
       }
       else
       {
-        powertrain_steer(0);
+        speedcontroller_steer(0);
       }
     }
     controller.prev_left_x_value = left_x_value;

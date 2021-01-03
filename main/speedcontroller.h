@@ -9,13 +9,16 @@
 //TYPES
 ///////////////////////////////////////////////////////////////////////////////
 
+enum speedcontroller_message_type_t {SPEEDCONTROLLER_SPEED, SPEEDCONTROLLER_STEERING, SPEEDCONTROLLER_BRAKE};
+
 /**
  * Called when the output is changed.
  *
+ * @param type Type of the changed output.
  * @param id ID of the input selected as output.
  * @param value Output value
  */
-typedef void (*speedcontroller_callback)(size_t id, float value);
+typedef void (*speedcontroller_callback)( enum speedcontroller_message_type_t type, size_t id, float value);
 enum speedcontroller_direction_t {SPEEDCONTROLLER_FORWARD, SPEEDCONTROLLER_REVERSE, SPEEDCONTROLLER_MAX};
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -52,6 +55,22 @@ void speedcontroller_register_listener(speedcontroller_callback listener);
  * @param value New value of the input.
  */
 void speedcontroller_input(size_t id, float value);
+
+/**
+ * Set the steering direction.
+ *
+ * @param value Negative value for right, positive for left and zero for center. [-1.0, 1.0]
+ */
+void speedcontroller_steer(float value);
+
+/**
+ * Engage/disengage the brakes.
+ *
+ * Both the front brakes and motor braking is used.
+ *
+ * @param value Engage/disengage.
+ */
+void speedcontroller_brake(bool value);
 
 /**
  * Set the direction.
