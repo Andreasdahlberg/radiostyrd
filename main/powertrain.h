@@ -18,18 +18,22 @@ enum powertrain_direction_t {POWERTRAIN_UNDEFINED, POWERTRAIN_FORWARD, POWERTRAI
  * Initialize all powertrain hardware hardware.
  */
 void powertrain_init(void);
+
+/**
+ * Set the desired speed.
+ *
+ * @param speed Speed [-1.0, 1.0]
+ */
 void powertrain_set_speed(float speed);
 
 /**
  * Get the current speed.
  *
- * @return Speed [0.0, 1.0]
+ * @return Speed [-1.0, 1.0]
  */
 float powertrain_get_speed(void);
 
 void powertrain_steer(float value);
-
-bool powertrain_is_forward(void);
 
 /**
  * Get the current direction.
@@ -50,7 +54,5 @@ float powertrain_get_max_speed(void);
 void powertrain_set_max_steer(float value);
 float powertrain_get_max_steer(void);
 
-
-void powertrain_set_headlight_brightness(float brightness);
 
 #endif

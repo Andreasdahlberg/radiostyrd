@@ -25,7 +25,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "driver/mcpwm.h"
 #include "driver/ledc.h"
@@ -64,6 +63,8 @@ static void disable_front_steering(void);
 static void enable_front_steering(void);
 static float speed_to_duty(float speed);
 static uint32_t steering_to_duty(float value);
+static inline bool is_forward(void);
+static inline void set_debug_led(float speed);
 
 ///////////////////////////////////////////////////////////////////////////////
 //TYPES
@@ -80,7 +81,6 @@ struct powertrain_t {
   struct parameter_t steer;
   bool invert_steering;
   bool braking;
-  SemaphoreHandle_t mutex;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -101,7 +101,6 @@ void powertrain_init(void)
   powertrain_status.speed.min = 35.0;
   powertrain_status.steer.max = 0.7;
   powertrain_status.steer.min = 0.0;
-  powertrain_status.mutex = xSemaphoreCreateMutex();
 
   init_led();
   init_gpio();
@@ -109,12 +108,6 @@ void powertrain_init(void)
   init_brake_pwm();
 
   ESP_LOGI(TAG, "Initialized");
-}
-
-bool powertrain_is_forward(void)
-{
-  /*TODO: Fix this, use powertrain_get_direction() */
-  return powertrain_status.speed.current >= 0;
 }
 
 enum powertrain_direction_t powertrain_get_direction(void)
@@ -193,23 +186,15 @@ void powertrain_steer(float value)
 
 void powertrain_set_speed(float speed)
 {
-  if (xSemaphoreTake(powertrain_status.mutex, 50 / portTICK_PERIOD_MS) == pdFALSE)
-  {
-    ESP_LOGE(TAG, "%s() Failed to obtain powertrain mutex", __FUNCTION__);
-    return;
-  }
-
   powertrain_status.speed.current = speed;
   if (!powertrain_status.braking)
   {
-
-    // TODO: What happens if direction is changed while braking?
     // Make sure that the car changes steer direction if the moving direction is changed.
     powertrain_steer(powertrain_status.steer.current);
 
     if (speed)
     {
-      if (powertrain_is_forward())
+      if (is_forward())
       {
         motor_forward(speed_to_duty(speed));
       }
@@ -224,13 +209,8 @@ void powertrain_set_speed(float speed)
       motor_disable();
     }
 
-#if ENABLE_DEBUG_LED
-    uint32_t duty = fabsf(speed) * PWM_MAX_VALUE;
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
-#endif
+    set_debug_led(speed);
   }
-  xSemaphoreGive(powertrain_status.mutex);
 }
 
 float powertrain_get_speed(void)
@@ -243,18 +223,10 @@ void powertrain_engage_brakes(void)
   char *task_name_p = pcTaskGetTaskName(NULL);
   ESP_LOGI(TAG, "%s() from %s", __FUNCTION__, task_name_p);
 
-  if (xSemaphoreTake(powertrain_status.mutex, 50 / portTICK_PERIOD_MS) == pdFALSE)
-  {
-    ESP_LOGE(TAG, "%s() Failed to obtain powertrain mutex", __FUNCTION__);
-    return;
-  }
-
   powertrain_status.braking = true;
 
   // Rear brakes
   motor_brake();
-
-  xSemaphoreGive(powertrain_status.mutex);
 
   // Front brakes
   ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_1, PWM_MAX_VALUE);
@@ -294,12 +266,10 @@ void powertrain_set_max_speed(float speed)
 
   // Set the current speed again so that the new max limit is applied.
   powertrain_set_speed(powertrain_status.speed.current);
-
 }
 
 float powertrain_get_max_speed(void)
 {
-  //ESP_LOGD(TAG, "%s()", __FUNCTION__);
   return powertrain_status.speed.max;
 }
 
@@ -327,13 +297,7 @@ void powertrain_set_max_steer(float value)
 
 float powertrain_get_max_steer(void)
 {
-  //ESP_LOGD(TAG, "%s()", __FUNCTION__);
   return powertrain_status.steer.max;
-}
-
-void powertrain_headlights_on(void)
-{
-  ESP_LOGV(TAG, "%s()", __FUNCTION__);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -492,4 +456,19 @@ static uint32_t steering_to_duty(float value)
   float limited_value = powertrain_status.steer.min + fabsf(value) * (powertrain_status.steer.max - powertrain_status.steer.min);
 
   return limited_value * PWM_MAX_VALUE;
+}
+
+static inline bool is_forward(void)
+{
+  /*TODO: Fix this, use powertrain_get_direction() */
+  return powertrain_status.speed.current >= 0;
+}
+
+static inline void set_debug_led(float speed)
+{
+#if ENABLE_DEBUG_LED
+    const uint32_t duty = fabsf(speed) * PWM_MAX_VALUE;
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, duty);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+#endif
 }
